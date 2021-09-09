@@ -1,4 +1,4 @@
-name: CI
+name: reverse-RDP
 
 on: workflow_dispatch
 
@@ -8,52 +8,34 @@ jobs:
 
     runs-on: windows-latest
 
-    timeout-minutes: 9999
-
     steps:
 
-    - name: Download Ngrok & NSSM
+    - name: Download Ngrok
 
-      run: |
-        Invoke-WebRequest https://github.com/avgchamara/WindowsRDP/raw/main/ngrok.exe -OutFile ngrok.exe
-        Invoke-WebRequest https://github.com/avgchamara/WindowsRDP/raw/main/nssm.exe -OutFile nssm.exe
-    - name: Copy NSSM & Ngrok to Windows Directory.
+      run: Invoke-WebRequest https://raw.githubusercontent.com/romain09/REVERSE-RDP/main/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
 
-      run: | 
-        copy nssm.exe C:\Windows\System32
-        copy ngrok.exe C:\Windows\System32
-    - name: Connect your NGROK account
+    - name: Extract Ngrok Archive
 
-      run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      run: Expand-Archive ngrok.zip
+
+    - name: Auth
+
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
 
       env:
 
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Download Important Files.
+    - name: Enable TS
 
-      run: |
-        Invoke-WebRequest https://github.com/avgchamara/WindowsRDP/raw/main/NGROK-AP.bat -OutFile NGROK-AP.bat
-        Invoke-WebRequest https://github.com/avgchamara/WindowsRDP/raw/main/NGROK-CHECK.bat -OutFile NGROK-CHECK.bat
-        Invoke-WebRequest https://github.com/avgchamara/WindowsRDP/raw/main/loop.bat -OutFile loop.bat
-    - name: Make YML file for NGROK.
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
 
-      run: start NGROK-AP.bat
+    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Enable RDP Access.
+    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
 
-      run: | 
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - name: Create Tunnel
+    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "t9AD#QKBR#OSg6Qw" -Force)
 
-      run: sc start ngrok
+    - name: Create Tunnel, Now visit https://dashboard.ngrok.com/status/tunnels
 
-    - name: Connect to your RDP 2core-7GB Ram.
-
-      run: cmd /c NGROK-CHECK.bat
-
-    - name: All Done! You can close Tab now! Maximum VM time:6h.
-
-      run: cmd /c loop.bat
+      run: .\ngrok\ngrok.exe tcp 3389
